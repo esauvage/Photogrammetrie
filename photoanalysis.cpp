@@ -96,11 +96,11 @@ PhotoAnalysis::PhotoAnalysis(QWidget *parent)
     //Les noms des fichiers qu'on va traiter
     QList<QString> fileNames;
     // Les noms des fichiers qu'on utilise
-    //fileNames.push_back("C:\\Users\\sauvagee\\Documents\\GitHub\\SIFT\\imgs\\canape1.jpg");
-    //fileNames.push_back("C:\\Users\\sauvagee\\Documents\\GitHub\\SIFT\\imgs\\canape2.jpg");
+    fileNames.push_back("C:\\Users\\sauvagee\\Documents\\GitHub\\SIFT\\imgs\\canape1.jpg");
+    fileNames.push_back("C:\\Users\\sauvagee\\Documents\\GitHub\\SIFT\\imgs\\canape2.jpg");
     // fileNames.push_back("/home/nsauvage/Images/Nausicaa.bmp");
-    fileNames.push_back("kermit000.jpg");
-    fileNames.push_back("kermit001.jpg");
+    //fileNames.push_back("kermit000.jpg");
+    //fileNames.push_back("kermit001.jpg");
     QList<QList<float>>prevPOIs;
     for (const auto & f : fileNames)
     {
@@ -150,6 +150,9 @@ PhotoAnalysis::~PhotoAnalysis()
 template<typename T>
 void PhotoAnalysis::testMatches(const QList<QList<T> > &a, const QList<QList<T> > &b)
 {
+    CImg<float>fondamentalMatrix(9, 0, 1, 1);
+    fondamentalMatrix.identity_matrix();
+    QList<QList<T>> matches;
     for (const auto & pA : a)
     {
         auto gradA = pA;
@@ -169,6 +172,23 @@ void PhotoAnalysis::testMatches(const QList<QList<T> > &a, const QList<QList<T> 
             }
             if (equivalent) {
                 qDebug() << "Matching point : " << pA << pB;
+                QList<T> match;
+                match << pA[0] << pA[1] << pB[0] << pB[1];
+                matches << match;
+                CImg<float>row(9,1, 1, 1);
+                row(0,0) = match[2] * match[0];
+                row(1,0) = match[2] * match[1];
+                row(2,0) = match[2];
+                row(3,0) = match[3] * match[0];
+                row(4,0) = match[3] * match[1];
+                row(5,0) = match[3];
+                row(6,0) = match[0];
+                row(7,0) = match[1];
+                row(8,0) = 1;
+                fondamentalMatrix.append(row, 'y');
+                if (fondamentalMatrix.height() >= fondamentalMatrix.width()) {
+                    fondamentalMatrix;
+                }
             }
         }
     }
