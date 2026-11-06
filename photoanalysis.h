@@ -2,7 +2,7 @@
 #define PHOTOANALYSIS_H
 
 #include <QMainWindow>
-//#include "CImg.h"
+#include "CImg.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -21,6 +21,7 @@ public:
 private:
     template<typename T>
     void testMatches(const QList<QList<T>> &a, const QList<QList<T>> &b);
+    cimg_library::CImg<float> estimateF(const  cimg_library::CImg<float> &A);
     Ui::PhotoAnalysis *ui;
 };
 #endif // PHOTOANALYSIS_H
