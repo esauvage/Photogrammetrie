@@ -33,5 +33,6 @@ private:
 	QList<float> descripteur(int x, int y, int z, int c, float angle, const cimg_library::CImg<T> &t);
 
 	Ui::PhotoAnalysis *ui;
+	QList <float> descMoy;
 };
 #endif // PHOTOANALYSIS_H

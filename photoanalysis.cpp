@@ -14,6 +14,7 @@ using namespace cimg_library;
 float magenta[3] = {255, 0, 255};
 float cyan[3] = {0, 255, 255};
 
+
 template<typename T>
 QList<float> PhotoAnalysis::descripteur(int x, int y, int z, int c, float angle, const CImg<T> &t) {
 	QList <float> ret;
@@ -32,28 +33,25 @@ QList<float> PhotoAnalysis::descripteur(int x, int y, int z, int c, float angle,
 }
 
 template<typename T>
-QList<float> PhotoAnalysis::oriente(int x, int y, int z, int c, const CImg<T> &t) {
+QList<float> PhotoAnalysis::oriente(int x, int y, int z, int c, const CImg<T> &L) {
 	QList <float> ret;
 	double theta;
 	double maxAmplitude = 0.;
-	for (int ch = 0; ch < fmin(t.spectrum(), 2); ++ch) {
-		CImg<float> vignette = t.get_slice(z).get_channel(ch);//.get_crop(x-2, y-2, x+2, y+2);
-		auto L = vignette.get_gradient("x")[0];
-		L = L.get_gradient("y")[0];
+	for (auto dX = -2; dX < 2; dX++) {
+		for (auto dY = -2; dY < 2; dY++) {
 		//Calcul de l'orientation
-		auto Dxx1 = L.atXY(x+1, y);
-		auto Dxx2 = L.atXY(x-1, y);
-		auto Dyy1 = L.atXY(x, y+1);
-		auto Dyy2 = L.atXY(x, y-1);
-		double amplitude = sqrt((Dxx1-Dxx2)*(Dxx1-Dxx2) + ((Dyy1-Dyy2) * (Dyy1-Dyy2)));
-		if (amplitude > maxAmplitude) {
-			maxAmplitude = amplitude;
-			theta = atan((Dyy1-Dyy2)/(Dxx1-Dxx2));
+			auto Dxx1 = L.atXY(dX + x +1, dY + y, z, c);
+			auto Dxx2 = L.atXY(dX + x -1, dY + y, z, c);
+			auto Dyy1 = L.atXY(dX + x, dY + y + 1, z, c);
+			auto Dyy2 = L.atXY(dX + x, dY + y - 1, z, c);
+			double amplitude = sqrt((Dxx1-Dxx2)*(Dxx1-Dxx2) + ((Dyy1-Dyy2) * (Dyy1-Dyy2)));
+			if (amplitude > maxAmplitude) {
+				maxAmplitude = amplitude;
+				theta = atan((Dyy1-Dyy2)/(Dxx1-Dxx2));
+			}
 		}
 	}
 	ret << maxAmplitude << theta;
-	// L.draw_arrow(x, y, x + 50 * amplitude * cos(theta), y + 50 * amplitude * sin(theta), magenta);
-	// L.save("vignette.bmp");
 	return ret;
 }
 
@@ -74,31 +72,34 @@ QList<QList<float>> PhotoAnalysis::maximas(const CImg<T> &DOFs)
 						 << DOFs(x-1, y-1, z+1, c) << DOFs(x-1, y, z+1, c) << DOFs(x-1, y+1, z+1, c) << DOFs(x, y-1, z+1, c) << DOFs(x, y, z+1, c) << DOFs(x, y+1, z+1, c) << DOFs(x+1, y-1, z+1, c)
 						 << DOFs(x+1, y, z+1, c) << DOFs(x+1, y+1, z+1, c);
 					const auto val = DOFs(x, y, z, c);
-                    const auto min = *std::min_element(vals.begin(), vals.end());
-                    const auto max = *std::max_element(vals.begin(), vals.end());
+					const auto min = *std::min_element(vals.begin(), vals.end());
+					const auto max = *std::max_element(vals.begin(), vals.end());
 					const T hysterisis = 0;//max-min;
 					if (((val+hysterisis*0.2) >= min && (val-hysterisis*0.2) <= max) || val != val)
-                        continue;
-					auto l1 = vals[15] - val;
-					auto l2 = vals[13] - val;
+						continue;
+					auto D = DOFs.get_slice(z).get_gradient("xy");
+					auto Dxx = D.at(0).get_gradient("x").at(0);
+					auto Dyy = D.at(1).get_gradient("y").at(0);
+					auto l1 = Dxx(x, y);
+					auto l2 = Dyy(x, y);
 					auto R = l1*l2 - 0.05*(l1 + l2)*(l1 + l2);//Criterion for corners
 					if (R < 0.1)
 						continue;
-					l1 = vals[10] - val;
-					l2 = vals[13] - val;
-					R = l1*l2 - 0.05*(l1 + l2)*(l1 + l2);//Criterion for corners
-					if (R < 0.1)
-						continue;
-					l1 = vals[15] - val;
-					l2 = vals[12] - val;
-					R = l1*l2 - 0.05*(l1 + l2)*(l1 + l2);//Criterion for corners
-					if (R < 0.1)
-						continue;
-					l1 = vals[10] - val;
-					l2 = vals[12] - val;
-					R = l1*l2 - 0.05*(l1 + l2)*(l1 + l2);//Criterion for corners
-					if (R < 0.1)
-						continue;
+					// l1 = vals[10] - val;
+					// l2 = vals[13] - val;
+					// R = l1*l2 - 0.05*(l1 + l2)*(l1 + l2);//Criterion for corners
+					// if (R < 0.1)
+					// 	continue;
+					// l1 = vals[15] - val;
+					// l2 = vals[12] - val;
+					// R = l1*l2 - 0.05*(l1 + l2)*(l1 + l2);//Criterion for corners
+					// if (R < 0.1)
+					// 	continue;
+					// l1 = vals[10] - val;
+					// l2 = vals[12] - val;
+					// R = l1*l2 - 0.05*(l1 + l2)*(l1 + l2);//Criterion for corners
+					// if (R < 0.1)
+					// 	continue;
 					double deltaX = 0.;
 					do {
 						auto d1 = DOFs.get_slice(z).get_channel(c).get_gradient("x").at(0);
@@ -177,16 +178,16 @@ PhotoAnalysis::PhotoAnalysis(QWidget *parent)
     : QMainWindow(parent)
 	 , ui(new Ui::PhotoAnalysis)
 {
-   ui->setupUi(this);
-    //Les noms des fichiers qu'on va traiter
-    QList<QString> fileNames;
-    // Les noms des fichiers qu'on utilise
-	//fileNames.push_back("C:\\Users\\sauvagee\\Documents\\GitHub\\SIFT\\imgs\\canape1.jpg");
-	//fileNames.push_back("C:\\Users\\sauvagee\\Documents\\GitHub\\SIFT\\imgs\\canape2.jpg");
-    // fileNames.push_back("/home/nsauvage/Images/Nausicaa.bmp");
+	ui->setupUi(this);
+	//Les noms des fichiers qu'on va traiter
+	QList<QString> fileNames;
+	// Les noms des fichiers qu'on utilise
+	// fileNames.push_back("C:\\Users\\sauvagee\\Documents\\GitHub\\SIFT\\imgs\\canape1.jpg");
+	// fileNames.push_back("C:\\Users\\sauvagee\\Documents\\GitHub\\SIFT\\imgs\\canape2.jpg");
+	// fileNames.push_back("/home/nsauvage/Images/Nausicaa.bmp");
 	fileNames.push_back("kermit000.jpg");
 	fileNames.push_back("kermit001.jpg");
-    QList<QList<float>>prevPOIs;
+	QList<QList<float>>prevPOIs;
 	cimg_library::CImg<float> prevImage;
 	for (const auto & f : fileNames)
     {
@@ -225,6 +226,13 @@ PhotoAnalysis::PhotoAnalysis(QWidget *parent)
 				p += angle;
 				auto desc = descripteur(p.at(0), p.at(1), p.at(2), p.at(3), p.at(7), Ls);
 				p += desc;
+				if (descMoy.isEmpty()) {
+					descMoy = desc;
+				} else {
+					for (int i = 0; i < desc.size(); ++i) {
+						descMoy[i] += desc[i];
+					}
+				}
 			}
 			for (auto &d : toDel) {
 				POIs.removeAll(d);
@@ -232,12 +240,43 @@ PhotoAnalysis::PhotoAnalysis(QWidget *parent)
 			pointsInteret << POIs;
 			image = image.resize_halfXY();
 		}
+		for (int i = 0; i < descMoy.size(); ++i) {
+			descMoy[i] /= pointsInteret.size();
+		}
+		double stdDev = 0;
+		for (const auto &p: pointsInteret) {
+			auto poi = p.last(descMoy.size());
+			for (int i = 0; i < descMoy.size(); ++i) {
+				stdDev += (poi[i] - descMoy[i])*(poi[i] - descMoy[i]);
+			}
+			stdDev = sqrt(stdDev);
+		}
+		QList <QList <float>> toDel;
+		for (const auto &p1: pointsInteret) {
+			auto poi1 = p1.last(descMoy.size());
+			auto dev = 0.;
+			for (const auto &p2: pointsInteret) {
+				if (p1 == p2) continue;
+				auto poi2 = p2.last(descMoy.size());
+				for (int i = 0; i < descMoy.size(); ++i) {
+					dev += (poi1[i] - poi2[i])*(poi1[i] - poi2[i]);
+				}
+				dev = sqrt(dev);
+				if (dev < stdDev*0.1) {
+					toDel << p2 << p1;
+				}
+			}
+		}
+		qDebug() << "Descripteur moyen: " << descMoy;
+		for (auto& p : toDel) {
+			pointsInteret.removeAll(p);
+		}
 		image = cimg_library::CImg<float>(f.toLocal8Bit());
 		image.append(prevImage);
 		for (const auto &p: pointsInteret){
-			auto pX = p.at(0)*pow(2,p.at(5)) + 50 * p.at(6) * cos(p.at(7));
+			auto pX = p.at(0)*pow(2,p.at(5)) + 2 * p.at(6) * cos(p.at(7));
 			pX = fmax(0, fmin(pX, image.width()));
-			auto pY = p.at(1)*pow(2,p.at(5)) + 50 * p.at(6) * sin(p.at(7));
+			auto pY = p.at(1)*pow(2,p.at(5)) + 2 * p.at(6) * sin(p.at(7));
 			pY = fmax(0, fmin(pY, image.height()));
 			image.draw_arrow(p.at(0)*pow(2,p.at(5)), p.at(1)*pow(2,p.at(5)),
 							 pX, pY, magenta);
@@ -286,7 +325,7 @@ QList<QList<T>> PhotoAnalysis::testMatches(const QList<QList<T> > &a, const QLis
 				const auto gradB = pB.last(52);
 				auto dist = 0.;
 				for (int i = 0; i < gradB.length(); i+=2) {
-					dist += (gradB[i]*gradB[i+1] - gradA[i]*gradA[i+1])*(gradB[i]*gradB[i+1] - gradA[i]*gradA[i+1]);
+					dist += (gradB[i+1] - gradA[i+1])*(gradB[i+1] - gradA[i+1]);
 				}
 				if (dist < minDist) {
 					minDist = dist;
