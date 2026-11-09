@@ -28,7 +28,7 @@ private:
 	template<typename T>
 	QList<QList<float>> maximas(const cimg_library::CImg<T> &DOFs);
 	template<typename T>
-	QList<float> oriente(int x, int y, int z, int c, const cimg_library::CImg<T> &t);
+	QList<float> oriente(int x, int y, int z, int c, const cimg_library::CImg<T> &t, int nbBins = 36);
 	template<typename T>
 	QList<float> descripteur(int x, int y, int z, int c, float angle, const cimg_library::CImg<T> &t);
 

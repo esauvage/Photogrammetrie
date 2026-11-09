@@ -13,30 +13,38 @@ using namespace cimg_library;
 
 float magenta[3] = {255, 0, 255};
 float cyan[3] = {0, 255, 255};
-
+float green[3] = {0, 255, 0};
 
 template<typename T>
 QList<float> PhotoAnalysis::descripteur(int x, int y, int z, int c, float angle, const CImg<T> &t) {
 	QList <float> ret;
-	// CImg<float> vignette = t.get_slice(z).get_channel(c);//.rotate(-angle*180./M_PI, x, y, 1);
-	// auto L = vignette.get_gradient("x")[0];
-	// L = L.get_gradient("y")[0];
-	// L.save("vignette.bmp");
-	for (int i = -2; i <= 2; ++i) {
-		for (int j = -2; j <= 2; ++j) {
-			ret << oriente(x + i, y + i, z, c, t);
-			ret.last() -= angle;
+	CImg<float> vignette = t.get_slice(z).get_channel(c);
+	// vignette.draw_arrow(x, y, x + 40 * cos(angle), y + 40 * sin(angle), magenta);
+	// vignette.rotate(-angle*180./M_PI, x, y, 1);
+	// vignette.save("vignette.bmp");
+	vignette = t.get_slice(z).get_channel(c);
+	vignette.rotate(-angle*180./M_PI, x, y, 1);
+	auto dX = (vignette.width() - t.width()) / 2.;
+	auto dY = (vignette.height() - t.height()) / 2.;
+	auto L = vignette.get_gradient("x")[0];
+	L = L.get_gradient("y")[0];
+	for (int i = -6; i <= 6; i+=3) {
+		for (int j = -6; j <= 6; j+=3) {
+			ret << oriente(x + dX + i, y + dY + j, z, c, L, 8);
 		}
 	}
-	ret << 1 << t.atXYZC(x,y,z, c);
+	float maxHisto = *std::max_element(ret.begin(), ret.end());
+	for (auto & r : ret) {
+		r /= maxHisto;
+	}
 	return ret;
 }
 
 template<typename T>
-QList<float> PhotoAnalysis::oriente(int x, int y, int z, int c, const CImg<T> &L) {
+QList<float> PhotoAnalysis::oriente(int x, int y, int z, int c, const CImg<T> &L, int nbBins) {
 	QList <float> ret;
-	double theta;
-	double maxAmplitude = 0.;
+	QList <float> bins;
+	bins.assign(nbBins, 0);
 	for (auto dX = -2; dX < 2; dX++) {
 		for (auto dY = -2; dY < 2; dY++) {
 		//Calcul de l'orientation
@@ -45,14 +53,12 @@ QList<float> PhotoAnalysis::oriente(int x, int y, int z, int c, const CImg<T> &L
 			auto Dyy1 = L.atXY(dX + x, dY + y + 1, z, c);
 			auto Dyy2 = L.atXY(dX + x, dY + y - 1, z, c);
 			double amplitude = sqrt((Dxx1-Dxx2)*(Dxx1-Dxx2) + ((Dyy1-Dyy2) * (Dyy1-Dyy2)));
-			if (amplitude > maxAmplitude) {
-				maxAmplitude = amplitude;
-				theta = atan((Dyy1-Dyy2)/(Dxx1-Dxx2));
-			}
+			if (!amplitude) continue;
+			double theta = atan((Dyy1-Dyy2)/(Dxx1-Dxx2));
+			bins[theta/bins.size()] += amplitude;
 		}
 	}
-	ret << maxAmplitude << theta;
-	return ret;
+	return bins;
 }
 
 template<typename T>
@@ -218,13 +224,17 @@ PhotoAnalysis::PhotoAnalysis(QWidget *parent)
 			QList < QList <float>> toDel;
 			for (auto& p : POIs) {
 				p << nbOctaves;
-				auto angle = oriente(p.at(0), p.at(1), p.at(2), p.at(3), Ls);
-				if (angle.at(0) < 0.1) { //Delete points without orientation
-					toDel << p;
-					continue;
+				auto bins = oriente(p.at(0), p.at(1), p.at(2), p.at(3), Ls);
+				auto angle = 0.;
+				auto maxBin = 0;
+				for (int i = 0; i < bins.size(); ++i) {
+					if (bins[i] > maxBin) {
+						angle = 360/bins.size() * (i + 0.5);
+						maxBin = bins[i];
+					}
 				}
-				p += angle;
-				auto desc = descripteur(p.at(0), p.at(1), p.at(2), p.at(3), p.at(7), Ls);
+				p << angle;
+				auto desc = descripteur(p.at(0), p.at(1), p.at(2), p.at(3), p.last(), Ls);
 				p += desc;
 				if (descMoy.isEmpty()) {
 					descMoy = desc;
@@ -251,26 +261,26 @@ PhotoAnalysis::PhotoAnalysis(QWidget *parent)
 			}
 			stdDev = sqrt(stdDev);
 		}
-		QList <QList <float>> toDel;
-		for (const auto &p1: pointsInteret) {
-			auto poi1 = p1.last(descMoy.size());
-			auto dev = 0.;
-			for (const auto &p2: pointsInteret) {
-				if (p1 == p2) continue;
-				auto poi2 = p2.last(descMoy.size());
-				for (int i = 0; i < descMoy.size(); ++i) {
-					dev += (poi1[i] - poi2[i])*(poi1[i] - poi2[i]);
-				}
-				dev = sqrt(dev);
-				if (dev < stdDev*0.1) {
-					toDel << p2 << p1;
-				}
-			}
-		}
-		qDebug() << "Descripteur moyen: " << descMoy;
-		for (auto& p : toDel) {
-			pointsInteret.removeAll(p);
-		}
+		// QList <QList <float>> toDel;
+		// for (const auto &p1: pointsInteret) {
+		// 	auto poi1 = p1.last(descMoy.size());
+		// 	auto dev = 0.;
+		// 	for (const auto &p2: pointsInteret) {
+		// 		if (p1 == p2) continue;
+		// 		auto poi2 = p2.last(descMoy.size());
+		// 		for (int i = 0; i < descMoy.size(); ++i) {
+		// 			dev += (poi1[i] - poi2[i])*(poi1[i] - poi2[i]);
+		// 		}
+		// 		dev = sqrt(dev);
+		// 		if (dev < stdDev*0.1) {
+		// 			toDel << p2 << p1;
+		// 		}
+		// 	}
+		// }
+		// qDebug() << "Descripteur moyen: " << descMoy;
+		// for (auto& p : toDel) {
+		// 	pointsInteret.removeAll(p);
+		// }
 		image = cimg_library::CImg<float>(f.toLocal8Bit());
 		image.append(prevImage);
 		for (const auto &p: pointsInteret){
@@ -280,6 +290,11 @@ PhotoAnalysis::PhotoAnalysis(QWidget *parent)
 			pY = fmax(0, fmin(pY, image.height()));
 			image.draw_arrow(p.at(0)*pow(2,p.at(5)), p.at(1)*pow(2,p.at(5)),
 							 pX, pY, magenta);
+			// for (int i = 9; i < p.size(); i+=1) {
+			// 	pX = (p.at(0) + (i/8)/5)*pow(2,p.at(5));
+			// 	pY = (p.at(1) + (i/8)%5)*pow(2,p.at(5));
+			// 	image.draw_arrow(pX, pY, pX + 20 * cos(p.at(i)), pY + 20 * sin(p.at(i)), green);
+			// }
 		}
 		ui->lblNbPoints->setText(ui->lblNbPoints->text() + QString("%1\n").arg(pointsInteret.length()));
 		if (!prevPOIs.empty()) {
@@ -314,7 +329,7 @@ QList<QList<T>> PhotoAnalysis::testMatches(const QList<QList<T> > &a, const QLis
 	cimg_library::CImg<float>fondamentalMatrix(9, 0, 1, 1);
     fondamentalMatrix.identity_matrix();
     QList<QList<T>> matches;
-	for (int i = 0; i < fmin(16, a.size()); ++i) {
+	for (int i = 0; i < fmin(fmin(16, a.size()), b.size()); ++i) {
 		double minDist = INFINITY;
 		QPair<int, int> bestPair;
 		for (const auto & pA : wA)
