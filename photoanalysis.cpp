@@ -28,9 +28,19 @@ QList<float> PhotoAnalysis::descripteur(int x, int y, int z, int c, float angle,
 	auto dY = (vignette.height() - t.height()) / 2.;
 	auto L = vignette.get_gradient("x")[0];
 	L = L.get_gradient("y")[0];
-	for (int i = -4; i <= 4; i+=2) {
-		for (int j = -4; j <= 4; j+=2) {
-			ret << oriente(x + dX + i, y + dY + j, 0, 0, L, 8);
+	for (int i = -8; i <= 8; i+=4) {
+		for (int j = -8; j <= 8; j+=4) {
+			QList <float> r;
+			r.assign(8, 0);
+			for (int l = -2; l <= 2; ++l) {
+				for (int k = -2; k <= 2; ++k) {
+					auto r11 = oriente(x + dX + i + l, y + dY + j + k, 0, 0, L, 8);
+					for (int m = 0; m < r11.size(); ++m) {
+						r[m] += r11[m];
+					}
+				}
+			}
+			ret << r;
 		}
 	}
 	float maxHisto = *std::max_element(ret.begin(), ret.end());
@@ -197,11 +207,11 @@ PhotoAnalysis::PhotoAnalysis(QWidget *parent)
 	//Les noms des fichiers qu'on va traiter
 	QList<QString> fileNames;
 	// Les noms des fichiers qu'on utilise
-	fileNames.push_back("C:\\Users\\sauvagee\\Documents\\GitHub\\SIFT\\imgs\\canape1.jpg");
-	fileNames.push_back("C:\\Users\\sauvagee\\Documents\\GitHub\\SIFT\\imgs\\canape2.jpg");
+	// fileNames.push_back("C:\\Users\\sauvagee\\Documents\\GitHub\\SIFT\\imgs\\canape1.jpg");
+	// fileNames.push_back("C:\\Users\\sauvagee\\Documents\\GitHub\\SIFT\\imgs\\canape2.jpg");
 	// fileNames.push_back("/home/nsauvage/Images/Nausicaa.bmp");
-	// fileNames.push_back("kermit000.jpg");
-	// fileNames.push_back("kermit001.jpg");
+	fileNames.push_back("kermit000.jpg");
+	fileNames.push_back("kermit001.jpg");
 	QList<QList<float>>prevPOIs;
 	cimg_library::CImg<float> prevImage;
 	for (const auto & f : fileNames)
@@ -244,28 +254,28 @@ PhotoAnalysis::PhotoAnalysis(QWidget *parent)
 				p << angle;
 				auto desc = descripteur(p.at(0), p.at(1), p.at(2), p.at(3), p.last(), Ls);
 				p += desc;
-				if (descMoy.isEmpty()) {
-					descMoy = desc;
-				} else {
-					for (int i = 0; i < desc.size(); ++i) {
-						descMoy[i] += desc[i];
-					}
-				}
+				// if (descMoy.isEmpty()) {
+				// 	descMoy = desc;
+				// } else {
+				// 	for (int i = 0; i < desc.size(); ++i) {
+				// 		descMoy[i] += desc[i];
+				// 	}
+				// }
 			}
 			pointsInteret << POIs;
 			image = image.resize_halfXY();
 		}
-		for (int i = 0; i < descMoy.size(); ++i) {
-			descMoy[i] /= pointsInteret.size();
-		}
-		double stdDev = 0;
-		for (const auto &p: pointsInteret) {
-			auto poi = p.last(descMoy.size());
-			for (int i = 0; i < descMoy.size(); ++i) {
-				stdDev += (poi[i] - descMoy[i])*(poi[i] - descMoy[i]);
-			}
-			stdDev = sqrt(stdDev);
-		}
+		// for (int i = 0; i < descMoy.size(); ++i) {
+		// 	descMoy[i] /= pointsInteret.size();
+		// }
+		// double stdDev = 0;
+		// for (const auto &p: pointsInteret) {
+		// 	auto poi = p.last(descMoy.size());
+		// 	for (int i = 0; i < descMoy.size(); ++i) {
+		// 		stdDev += (poi[i] - descMoy[i])*(poi[i] - descMoy[i]);
+		// 	}
+		// 	stdDev = sqrt(stdDev);
+		// }
 		// QList <QList <float>> toDel;
 		// for (const auto &p1: pointsInteret) {
 		// 	auto poi1 = p1.last(descMoy.size());
@@ -334,9 +344,11 @@ QList<QList<T>> PhotoAnalysis::testMatches(const QList<QList<T> > &a, const QLis
 	cimg_library::CImg<float>fondamentalMatrix(9, 0, 1, 1);
     fondamentalMatrix.identity_matrix();
     QList<QList<T>> matches;
-	for (int i = 0; i < fmin(fmin(16, a.size()), b.size()); ++i) {
+	for (int i = 0; wA.size() && wB.size() && matches.size()<16; ++i) {
 		double minDist = INFINITY;
+		double minDist2 = INFINITY;
 		QPair<int, int> bestPair;
+		QPair<int, int> bestPair2;
 		for (const auto & pA : wA)
 		{
 			const auto gradA = pA.last(8*25);
@@ -348,19 +360,27 @@ QList<QList<T>> PhotoAnalysis::testMatches(const QList<QList<T> > &a, const QLis
 					dist += (gradB[i] - gradA[i])*(gradB[i] - gradA[i]);
 				}
 				if (dist < minDist) {
+					minDist2 = minDist;
 					minDist = dist;
+					bestPair2 = bestPair;
 					bestPair.first = wA.indexOf(pA);
 					bestPair.second = wB.indexOf(pB);
 				}
 			}
 		}
-		// if (equivalent) {
-		qDebug() << "Matching point : " << minDist << "\n" << wA.at(bestPair.first)  << "\n" << wB.at(bestPair.second);
 		QList<T> match;
 		match << wA.at(bestPair.first)[0] << wA.at(bestPair.first)[1] << wA.at(bestPair.first)[5]
 			  << wB.at(bestPair.second)[0] << wB.at(bestPair.second)[1] << wB.at(bestPair.second)[5];
-		matches << match;
 		wA.removeAll(wA.at(bestPair.first));
+		if (minDist/minDist2 > 0.95) {
+			// auto B1 = wB.at(bestPair.second);
+			// auto B2 = wB.at(bestPair2.second);
+			// wB.removeAll(B1);
+			// wB.removeAll(B2);
+			continue;
+		}
+		qDebug() << "Matching point : " << minDist << "\n" << wA.at(bestPair.first)  << "\n" << wB.at(bestPair.second);
+		matches << match;
 		wB.removeAll(wB.at(bestPair.second));
 	}
 	// cimg_library::CImg<float>row(9,1, 1, 1);
