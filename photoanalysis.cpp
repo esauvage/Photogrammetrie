@@ -44,20 +44,25 @@ template<typename T>
 QList<float> PhotoAnalysis::oriente(int x, int y, int z, int c, const CImg<T> &L, int nbBins) {
 	QList <float> ret;
 	QList <float> bins;
+	int degByBin = 360/nbBins;
 	bins.assign(nbBins, 0);
-	for (auto dX = -2; dX < 2; dX++) {
-		for (auto dY = -2; dY < 2; dY++) {
+	for (auto dX = -1; dX < 1; dX++) {
+		for (auto dY = -1; dY < 1; dY++) {
 		//Calcul de l'orientation
-			auto Dxx1 = L.atXY(dX + x +1, dY + y, z, c);
-			auto Dxx2 = L.atXY(dX + x -1, dY + y, z, c);
-			auto Dyy1 = L.atXY(dX + x, dY + y + 1, z, c);
-			auto Dyy2 = L.atXY(dX + x, dY + y - 1, z, c);
+			auto Dxx1 = L(dX + x +1, dY + y, z, c);
+			auto Dxx2 = L(dX + x -1, dY + y, z, c);
+			auto Dyy1 = L(dX + x, dY + y + 1, z, c);
+			auto Dyy2 = L(dX + x, dY + y - 1, z, c);
 			double amplitude = sqrt((Dxx1-Dxx2)*(Dxx1-Dxx2) + ((Dyy1-Dyy2) * (Dyy1-Dyy2)));
 			if (!amplitude) continue;
-			double theta = atan((Dyy1-Dyy2)/(Dxx1-Dxx2));
-			bins[theta/bins.size()] += amplitude;
+			int theta = atan((Dyy1-Dyy2)/(Dxx1-Dxx2)) * 180/M_PI + 360;
+			theta %= 360;
+			bins[theta/degByBin] += amplitude;
 		}
 	}
+	auto vignette = L.get_slice(z);
+	vignette.draw_circle(x, y, 2, magenta);
+	vignette.save("vignette.bmp");
 	return bins;
 }
 
@@ -229,7 +234,7 @@ PhotoAnalysis::PhotoAnalysis(QWidget *parent)
 				auto maxBin = 0;
 				for (int i = 0; i < bins.size(); ++i) {
 					if (bins[i] > maxBin) {
-						angle = 360/bins.size() * (i + 0.5);
+						angle = (2 * M_PI)/bins.size() * (i + 0.5);
 						maxBin = bins[i];
 					}
 				}
