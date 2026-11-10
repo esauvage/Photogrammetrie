@@ -28,9 +28,9 @@ QList<float> PhotoAnalysis::descripteur(int x, int y, int z, int c, float angle,
 	auto dY = (vignette.height() - t.height()) / 2.;
 	auto L = vignette.get_gradient("x")[0];
 	L = L.get_gradient("y")[0];
-	for (int i = -6; i <= 6; i+=3) {
-		for (int j = -6; j <= 6; j+=3) {
-			ret << oriente(x + dX + i, y + dY + j, z, c, L, 8);
+	for (int i = -4; i <= 4; i+=2) {
+		for (int j = -4; j <= 4; j+=2) {
+			ret << oriente(x + dX + i, y + dY + j, 0, 0, L, 8);
 		}
 	}
 	float maxHisto = *std::max_element(ret.begin(), ret.end());
@@ -46,8 +46,12 @@ QList<float> PhotoAnalysis::oriente(int x, int y, int z, int c, const CImg<T> &L
 	QList <float> bins;
 	int degByBin = 360/nbBins;
 	bins.assign(nbBins, 0);
-	for (auto dX = -1; dX < 1; dX++) {
-		for (auto dY = -1; dY < 1; dY++) {
+	for (auto dX = -1; dX <= 1; dX++) {
+		if ((dX + x + 1) >= L.width()) continue;
+		if ((dX + x - 1) < 0) continue;
+		for (auto dY = -1; dY <= 1; dY++) {
+			if ((dY + y + 1) >= L.height()) continue;
+			if ((dY + y - 1) < 0) continue;
 		//Calcul de l'orientation
 			auto Dxx1 = L(dX + x +1, dY + y, z, c);
 			auto Dxx2 = L(dX + x -1, dY + y, z, c);
@@ -60,9 +64,9 @@ QList<float> PhotoAnalysis::oriente(int x, int y, int z, int c, const CImg<T> &L
 			bins[theta/degByBin] += amplitude;
 		}
 	}
-	auto vignette = L.get_slice(z);
-	vignette.draw_circle(x, y, 2, magenta);
-	vignette.save("vignette.bmp");
+	// auto vignette = L.get_slice(z);
+	// vignette.draw_circle(x, y, 2, magenta);
+	// vignette.save("vignette.bmp");
 	return bins;
 }
 
@@ -193,11 +197,11 @@ PhotoAnalysis::PhotoAnalysis(QWidget *parent)
 	//Les noms des fichiers qu'on va traiter
 	QList<QString> fileNames;
 	// Les noms des fichiers qu'on utilise
-	// fileNames.push_back("C:\\Users\\sauvagee\\Documents\\GitHub\\SIFT\\imgs\\canape1.jpg");
-	// fileNames.push_back("C:\\Users\\sauvagee\\Documents\\GitHub\\SIFT\\imgs\\canape2.jpg");
+	fileNames.push_back("C:\\Users\\sauvagee\\Documents\\GitHub\\SIFT\\imgs\\canape1.jpg");
+	fileNames.push_back("C:\\Users\\sauvagee\\Documents\\GitHub\\SIFT\\imgs\\canape2.jpg");
 	// fileNames.push_back("/home/nsauvage/Images/Nausicaa.bmp");
-	fileNames.push_back("kermit000.jpg");
-	fileNames.push_back("kermit001.jpg");
+	// fileNames.push_back("kermit000.jpg");
+	// fileNames.push_back("kermit001.jpg");
 	QList<QList<float>>prevPOIs;
 	cimg_library::CImg<float> prevImage;
 	for (const auto & f : fileNames)
@@ -226,7 +230,6 @@ PhotoAnalysis::PhotoAnalysis(QWidget *parent)
 			}
 			Ls = Ls.append(prev, 'z');
 			auto POIs = maximas(DOGs);
-			QList < QList <float>> toDel;
 			for (auto& p : POIs) {
 				p << nbOctaves;
 				auto bins = oriente(p.at(0), p.at(1), p.at(2), p.at(3), Ls);
@@ -248,9 +251,6 @@ PhotoAnalysis::PhotoAnalysis(QWidget *parent)
 						descMoy[i] += desc[i];
 					}
 				}
-			}
-			for (auto &d : toDel) {
-				POIs.removeAll(d);
 			}
 			pointsInteret << POIs;
 			image = image.resize_halfXY();
@@ -289,9 +289,9 @@ PhotoAnalysis::PhotoAnalysis(QWidget *parent)
 		image = cimg_library::CImg<float>(f.toLocal8Bit());
 		image.append(prevImage);
 		for (const auto &p: pointsInteret){
-			auto pX = p.at(0)*pow(2,p.at(5)) + 2 * p.at(6) * cos(p.at(7));
+			auto pX = p.at(0)*pow(2,p.at(5)) + 20 * cos(p.at(6));
 			pX = fmax(0, fmin(pX, image.width()));
-			auto pY = p.at(1)*pow(2,p.at(5)) + 2 * p.at(6) * sin(p.at(7));
+			auto pY = p.at(1)*pow(2,p.at(5)) + 20 * sin(p.at(6));
 			pY = fmax(0, fmin(pY, image.height()));
 			image.draw_arrow(p.at(0)*pow(2,p.at(5)), p.at(1)*pow(2,p.at(5)),
 							 pX, pY, magenta);
@@ -339,13 +339,13 @@ QList<QList<T>> PhotoAnalysis::testMatches(const QList<QList<T> > &a, const QLis
 		QPair<int, int> bestPair;
 		for (const auto & pA : wA)
 		{
-			const auto gradA = pA.last(52);
+			const auto gradA = pA.last(8*25);
 			for (const auto & pB : wB)
 			{
-				const auto gradB = pB.last(52);
+				const auto gradB = pB.last(8*25);
 				auto dist = 0.;
-				for (int i = 0; i < gradB.length(); i+=2) {
-					dist += (gradB[i+1] - gradA[i+1])*(gradB[i+1] - gradA[i+1]);
+				for (int i = 0; i < gradB.length(); i+=1) {
+					dist += (gradB[i] - gradA[i])*(gradB[i] - gradA[i]);
 				}
 				if (dist < minDist) {
 					minDist = dist;
