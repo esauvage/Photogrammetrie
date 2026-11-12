@@ -318,6 +318,10 @@ PhotoAnalysis::PhotoAnalysis(QWidget *parent)
 				image.draw_line(p.at(0)*pow(2,p.at(2)), p.at(1)*pow(2,p.at(2)),
 								p.at(3)*pow(2,p.at(5))+ prevImage.width(), p.at(4)*pow(2,p.at(5)), cyan);
 			}
+			auto F = fondamentale(matchs);
+			cimg_forXY(F, x, y) {
+				qDebug() << F(x, y);
+			}
 		}
 		image.save(QString("poi%1.bmp").arg(name).toLocal8Bit());
 		ui->lblNbPoints->setPixmap(QPixmap(QString("poi%1.bmp").arg(name)));
@@ -344,7 +348,7 @@ QList<QList<T>> PhotoAnalysis::testMatches(const QList<QList<T> > &a, const QLis
 	cimg_library::CImg<float>fondamentalMatrix(9, 0, 1, 1);
     fondamentalMatrix.identity_matrix();
     QList<QList<T>> matches;
-	for (int i = 0; wA.size() && wB.size() && matches.size()<16; ++i) {
+	for (int i = 0; wA.size() && wB.size() && matches.size()<30; ++i) {
 		double minDist = INFINITY;
 		double minDist2 = INFINITY;
 		QPair<int, int> bestPair;
@@ -398,4 +402,38 @@ QList<QList<T>> PhotoAnalysis::testMatches(const QList<QList<T> > &a, const QLis
 	// 	auto solution = estimateF(fondamentalMatrix);
 	// }
 	return matches;
+}
+
+template<typename T>
+cimg_library::CImg<T> PhotoAnalysis::fondamentale(QList<QList<T> > matches)
+{
+	//on construit une matrice A de taille n×9 où chaque ligne est de la forme :
+	// [uu′,uv′,u,vu′,vv′,v,u^′,v^′,1]
+	CImg<T> A(matches.size(), 9);
+	for (int i = 0; i < matches.size();++i) {
+		const auto & m=matches.at(i);
+		A(i, 0) = m.at(0)*pow(2, m.at(2))*m.at(3)*pow(2, m.at(5));
+		A(i, 1) = m.at(0)*pow(2, m.at(2))*m.at(4)*pow(2, m.at(5));
+		A(i, 2) = m.at(0)*pow(2, m.at(2));
+		A(i, 3) = m.at(1)*pow(2, m.at(2))*m.at(3)*pow(2, m.at(5));
+		A(i, 4) = m.at(1)*pow(2, m.at(2))*m.at(4)*pow(2, m.at(5));
+		A(i, 5) = m.at(1)*pow(2, m.at(2));
+		A(i, 6) = m.at(3)*pow(2, m.at(5));
+		A(i, 7) = m.at(4)*pow(2, m.at(5));
+		A(i, 8) = 1;
+	}
+	auto r = A.get_SVD();
+	qDebug() << r.at(0).width() << r.at(0).height();
+	qDebug() << r.at(1).width() << r.at(1).height();
+	qDebug() << r.at(2).width() << r.at(2).height();
+	// La solution f est la dernière colonne de V
+	// On extrait cette colonne (qui contient n éléments)
+	CImg<double> f = r.at(2).get_column(r.at(2).width() - 1);
+	// On ne garde que les 9 premiers coefficients (la partie utile)
+	// et on les remet en forme 3x3 pour former F
+	CImg<T> F(3, 3);
+	for (int i = 0; i < 9; ++i) {
+		F(i % 3, i / 3) = f(i); // Attention à l'ordre de remplissage
+	}
+	return F;
 }

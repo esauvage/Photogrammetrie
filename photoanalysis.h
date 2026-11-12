@@ -31,6 +31,8 @@ private:
 	QList<float> oriente(int x, int y, int z, int c, const cimg_library::CImg<T> &t, int nbBins = 36);
 	template<typename T>
 	QList<float> descripteur(int x, int y, int z, int c, float angle, const cimg_library::CImg<T> &t);
+	template<typename T>
+	cimg_library::CImg<T> fondamentale(QList<QList<T> > matches);
 
 	Ui::PhotoAnalysis *ui;
 	QList <float> descMoy;
