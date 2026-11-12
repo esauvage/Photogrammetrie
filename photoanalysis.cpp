@@ -5,7 +5,8 @@
 #include "CImg.h"
 
 #include <algorithm>
-#include "CImg.h"
+#include <QFile>
+#include <QRandomGenerator>
 //#include <iostream>
 
 using namespace cimg_library;
@@ -62,7 +63,7 @@ QList<float> PhotoAnalysis::oriente(int x, int y, int z, int c, const CImg<T> &L
 		for (auto dY = -1; dY <= 1; dY++) {
 			if ((dY + y + 1) >= L.height()) continue;
 			if ((dY + y - 1) < 0) continue;
-		//Calcul de l'orientation
+			//Calcul de l'orientation
 			auto Dxx1 = L(dX + x +1, dY + y, z, c);
 			auto Dxx2 = L(dX + x -1, dY + y, z, c);
 			auto Dyy1 = L(dX + x, dY + y + 1, z, c);
@@ -85,46 +86,34 @@ QList<QList<float>> PhotoAnalysis::maximas(const CImg<T> &DOFs)
 {
 	QList<QList<float>>r;
 	for (int z = 1; z < DOFs.depth()-1; ++z){
+		auto D = DOFs.get_slice(z).get_gradient("xy");
+		auto Dxx = D.at(0).get_gradient("x").at(0);
+		auto Dyy = D.at(1).get_gradient("y").at(0);
 		for (int y = 1; y < DOFs.height()-1; ++y){
 			for (int x = 1; x < DOFs.width()-1; ++x){
 				for (int c = 0; c < 1/*DOFs.spectrum()*/; ++c){
-                    QList<T> vals;
+					// QList<T> vals;
+					auto vals = DOFs.get_crop(x-1,y-1, z-1, x+1, y+1, z+1);
 					float dX = x;
-					vals << DOFs(x-1, y-1, z-1, c) << DOFs(x-1, y, z-1, c) << DOFs(x-1, y+1, z-1, c) << DOFs(x, y-1, z-1, c) << DOFs(x, y, z-1, c) << DOFs(x, y+1, z-1, c) << DOFs(x+1, y-1, z-1, c)
-						 << DOFs(x+1, y, z-1, c) << DOFs(x+1, y+1, z-1, c)
-						 << DOFs(x-1, y-1, z, c) << DOFs(x-1, y, z, c) << DOFs(x-1, y+1, z, c) << DOFs(x, y-1, z, c) << DOFs(x, y+1, z, c) << DOFs(x+1, y-1, z, c) << DOFs(x+1, y, z, c)
-						 << DOFs(x+1, y+1, z, c)
-						 << DOFs(x-1, y-1, z+1, c) << DOFs(x-1, y, z+1, c) << DOFs(x-1, y+1, z+1, c) << DOFs(x, y-1, z+1, c) << DOFs(x, y, z+1, c) << DOFs(x, y+1, z+1, c) << DOFs(x+1, y-1, z+1, c)
-						 << DOFs(x+1, y, z+1, c) << DOFs(x+1, y+1, z+1, c);
+					// vals << DOFs(x-1, y-1, z-1, c) << DOFs(x-1, y, z-1, c) << DOFs(x-1, y+1, z-1, c) << DOFs(x, y-1, z-1, c) << DOFs(x, y, z-1, c) << DOFs(x, y+1, z-1, c) << DOFs(x+1, y-1, z-1, c)
+					// 	 << DOFs(x+1, y, z-1, c) << DOFs(x+1, y+1, z-1, c)
+					// 	 << DOFs(x-1, y-1, z, c) << DOFs(x-1, y, z, c) << DOFs(x-1, y+1, z, c) << DOFs(x, y-1, z, c) << DOFs(x, y+1, z, c) << DOFs(x+1, y-1, z, c) << DOFs(x+1, y, z, c)
+					// 	 << DOFs(x+1, y+1, z, c)
+					// 	 << DOFs(x-1, y-1, z+1, c) << DOFs(x-1, y, z+1, c) << DOFs(x-1, y+1, z+1, c) << DOFs(x, y-1, z+1, c) << DOFs(x, y, z+1, c) << DOFs(x, y+1, z+1, c) << DOFs(x+1, y-1, z+1, c)
+					// 	 << DOFs(x+1, y, z+1, c) << DOFs(x+1, y+1, z+1, c);
 					const auto val = DOFs(x, y, z, c);
-					const auto min = *std::min_element(vals.begin(), vals.end());
-					const auto max = *std::max_element(vals.begin(), vals.end());
+					// const auto min = *std::min_element(vals.begin(), vals.end());
+					// const auto max = *std::max_element(vals.begin(), vals.end());
+					const auto min = vals.min();
+					const auto max = vals.max();
 					const T hysterisis = 0;//max-min;
-					if (((val+hysterisis*0.2) >= min && (val-hysterisis*0.2) <= max) || val != val)
+					if (((val+hysterisis*0.2) > min && (val-hysterisis*0.2) < max) || val != val)
 						continue;
-					auto D = DOFs.get_slice(z).get_gradient("xy");
-					auto Dxx = D.at(0).get_gradient("x").at(0);
-					auto Dyy = D.at(1).get_gradient("y").at(0);
 					auto l1 = Dxx(x, y);
 					auto l2 = Dyy(x, y);
 					auto R = l1*l2 - 0.05*(l1 + l2)*(l1 + l2);//Criterion for corners
 					if (R < 0.1)
 						continue;
-					// l1 = vals[10] - val;
-					// l2 = vals[13] - val;
-					// R = l1*l2 - 0.05*(l1 + l2)*(l1 + l2);//Criterion for corners
-					// if (R < 0.1)
-					// 	continue;
-					// l1 = vals[15] - val;
-					// l2 = vals[12] - val;
-					// R = l1*l2 - 0.05*(l1 + l2)*(l1 + l2);//Criterion for corners
-					// if (R < 0.1)
-					// 	continue;
-					// l1 = vals[10] - val;
-					// l2 = vals[12] - val;
-					// R = l1*l2 - 0.05*(l1 + l2)*(l1 + l2);//Criterion for corners
-					// if (R < 0.1)
-					// 	continue;
 					double deltaX = 0.;
 					do {
 						auto d1 = DOFs.get_slice(z).get_channel(c).get_gradient("x").at(0);
@@ -221,8 +210,8 @@ PhotoAnalysis::PhotoAnalysis(QWidget *parent)
 		// auto lPOIs = analyseGradient(image, name);
 		QList<QList<float>>pointsInteret;
 		for (auto ref = qMin(image.width(), image.height()), nbOctaves = 0;ref > 16; ref >>= 1, nbOctaves++) {
-			cimg_library::CImg<float>DOGs;
-			cimg_library::CImg<float>Ls;
+			CImg<float>DOGs;
+			CImg<float>Ls;
 			auto prev = image.get_RGBtoYCbCr().get_channel(0);
 			for (int i = 0, k = 2; i < 10; ++i)
 			{
@@ -318,9 +307,68 @@ PhotoAnalysis::PhotoAnalysis(QWidget *parent)
 				image.draw_line(p.at(0)*pow(2,p.at(2)), p.at(1)*pow(2,p.at(2)),
 								p.at(3)*pow(2,p.at(5))+ prevImage.width(), p.at(4)*pow(2,p.at(5)), cyan);
 			}
-			auto F = fondamentale(matchs);
-			cimg_forXY(F, x, y) {
-				qDebug() << F(x, y);
+			CImg<float> definitiveF;
+			float distMin = INFINITY;
+			for (int i = 0; i < 10; ++i) {
+				QList<QList <float>> inliers_sample;
+				std::sample(matchs.cbegin(), matchs.cend(),
+							std::back_inserter(inliers_sample), 8,
+							*QRandomGenerator::global());
+				auto F = fondamentale(inliers_sample);
+				cimg_forXY(F, x, y) {
+					qDebug() << F(x, y);
+				}
+				CImg<float> U, S, V;
+				F.SVD(U, S, V);
+				// e  : vecteur propre droit de F  -> dernière colonne de V
+				CImg<float> e  = V.get_column(2);
+				qDebug() << "direction de 2 vers 1";
+				cimg_forXY(e, x, y) {
+					qDebug() << e(x, y);
+				}
+				// e' : vecteur propre gauche de F -> dernière colonne de U
+				qDebug() << "direction de 1 vers 2";
+				CImg<float> ep = U.get_column(2);
+				cimg_forXY(ep, x, y) {
+					qDebug() << ep(x, y);
+				}
+				CImg<float> P1 = F;
+				P1.identity_matrix();
+				P1.append(CImg<float>::row_vector(0, 0, 0).transpose(), 'x');
+				CImg<float> skew(3,3,1,1,0);
+				skew(0,1) = -ep(2); skew(0,2) =  ep(1);
+				skew(1,0) =  ep(2); skew(1,2) = -ep(0);
+				skew(2,0) = -ep(1); skew(2,1) =  ep(0);
+
+				CImg<float> P2 = skew * F;
+				P2.append(ep, 'x');
+
+				QList <QList <float>> points3D;
+				float dist = 0;
+				for (const auto &p: matchs) {
+					// QList<float>X1;
+					CImg<float>X1(2, 1, 1, 1);
+					X1(0) = p.at(0)*pow(2,p.at(2));
+					X1(1) = p.at(1)*pow(2,p.at(2));
+					CImg<float>X2(2, 1, 1, 1);
+					X2(0) = p.at(3)*pow(2,p.at(5));
+					X2(1) = p.at(4)*pow(2,p.at(5));
+					// X1 << p.at(0)*pow(2,p.at(2)) << p.at(1)*pow(2,p.at(2));
+					// QList<float>X2;
+					// X2 << p.at(3)*pow(2,p.at(5)) << p.at(4)*pow(2,p.at(5));
+					auto X = placePoint(P1, P2, X1, X2);
+					qDebug() << X(0) << X(1) << X(2);
+					auto x1 = P1*X;
+					auto x2 = P2*X;
+					dist += sqrt((X1(0)-x1(0)) * (X1(0)-x1(0)) + (X1(1)-x1(1)) * (X1(1)-x1(1)) + (X2(0)-x2(0)) * (X2(0)-x2(0)) + (X2(1)-x2(1)) * (X2(1)-x2(1)));
+					QList <float> p3D;
+					p3D << X(0) << X(1) << X(2);
+					points3D << p3D;
+				}
+				if (dist < distMin) {
+					definitiveF = F;
+					export2Ply(points3D);
+				}
 			}
 		}
 		image.save(QString("poi%1.bmp").arg(name).toLocal8Bit());
@@ -348,7 +396,7 @@ QList<QList<T>> PhotoAnalysis::testMatches(const QList<QList<T> > &a, const QLis
 	cimg_library::CImg<float>fondamentalMatrix(9, 0, 1, 1);
     fondamentalMatrix.identity_matrix();
     QList<QList<T>> matches;
-	for (int i = 0; wA.size() && wB.size() && matches.size()<30; ++i) {
+	for (int i = 0; wA.size() && wB.size() && matches.size()<100; ++i) {
 		double minDist = INFINITY;
 		double minDist2 = INFINITY;
 		QPair<int, int> bestPair;
@@ -376,7 +424,7 @@ QList<QList<T>> PhotoAnalysis::testMatches(const QList<QList<T> > &a, const QLis
 		match << wA.at(bestPair.first)[0] << wA.at(bestPair.first)[1] << wA.at(bestPair.first)[5]
 			  << wB.at(bestPair.second)[0] << wB.at(bestPair.second)[1] << wB.at(bestPair.second)[5];
 		wA.removeAll(wA.at(bestPair.first));
-		if (minDist/minDist2 > 0.95) {
+		if (minDist/minDist2 > 0.99) {
 			// auto B1 = wB.at(bestPair.second);
 			// auto B2 = wB.at(bestPair2.second);
 			// wB.removeAll(B1);
@@ -428,12 +476,64 @@ cimg_library::CImg<T> PhotoAnalysis::fondamentale(QList<QList<T> > matches)
 	qDebug() << r.at(2).width() << r.at(2).height();
 	// La solution f est la dernière colonne de V
 	// On extrait cette colonne (qui contient n éléments)
-	CImg<double> f = r.at(2).get_column(r.at(2).width() - 1);
+	CImg<T> f = r.at(2).get_column(r.at(2).width() - 1);
 	// On ne garde que les 9 premiers coefficients (la partie utile)
 	// et on les remet en forme 3x3 pour former F
 	CImg<T> F(3, 3);
 	for (int i = 0; i < 9; ++i) {
 		F(i % 3, i / 3) = f(i); // Attention à l'ordre de remplissage
 	}
-	return F;
+	CImg<T> U, S, V;
+	F.SVD(U, S, V);
+
+	// Forcer la plus petite valeur singulière à zéro
+	int idx_min = 0;
+	for (int i = 0; i < (int)S.size(); ++i)
+		if (S(i) < S(idx_min)) idx_min = i;
+	S(idx_min) = 0;
+	S.diagonal();
+
+	// Reconstruction F_corrigée = U * diag(S) * V^T
+	CImg<T> F_corr = U * S * V.get_transpose();
+	return F_corr;
+}
+
+template<typename T>
+CImg<T> PhotoAnalysis::placePoint(CImg<T> &P1, CImg<T> &P2, CImg<T> x1, CImg<T> x2) {
+	// P1, P2 : CImg<double> 3x4 (les matrices de projection)
+	// x1, x2 : CImg<double> 3x1 (points homogènes, ou 1x3)
+	CImg<T> A(4, 4, 1, 1, 0);
+
+	auto remplir = [&](const CImg<T>& P, const CImg<T>& x, int ligne) {
+		T u = x(0), v = x(1);
+		for (int j = 0; j < 4; ++j) {
+			A(ligne,   j) = u * P(2, j) - P(0, j);
+			A(ligne+1, j) = v * P(2, j) - P(1, j);
+		}
+	};
+	remplir(P1, x1, 0);
+	remplir(P2, x2, 2);
+
+	CImg<T> U, S, V;
+	A.SVD(U, S, V);
+	CImg<T> Xh = V.get_column(3);   // vecteur homogène 4x1
+
+	// Déshomogénéisation
+	double w = Xh(3);
+	if (std::abs(w) < 1e-12) { /* point à l'infini : direction pure */ }
+	CImg<T> X = Xh.get_rows(0, 3) / w;   // coordonnées 3D
+	return X;
+}
+
+void PhotoAnalysis::export2Ply(QList <QList <float>> points3D) {
+	QFile file("heightMap.ply");
+	if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+		return;
+	}
+	QTextStream out(&file);
+	out << "ply" << Qt::endl << "format ascii 1.0" << Qt::endl << "element vertex " << points3D.size() << Qt::endl;
+	out << "property float x" << Qt::endl << "property float y" << Qt::endl << "property float z" << Qt::endl << "end_header" << Qt::endl;
+	for (const auto &p : points3D) {
+		out << p.at(0) << "\t" << p.at(1) << "\t" << p.at(2) << Qt::endl;
+	}
 }

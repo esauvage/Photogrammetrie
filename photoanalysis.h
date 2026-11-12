@@ -33,6 +33,9 @@ private:
 	QList<float> descripteur(int x, int y, int z, int c, float angle, const cimg_library::CImg<T> &t);
 	template<typename T>
 	cimg_library::CImg<T> fondamentale(QList<QList<T> > matches);
+	template<typename T>
+	cimg_library::CImg<T> placePoint(cimg_library::CImg<T> &P1, cimg_library::CImg<T> &P2, cimg_library::CImg<T> x1, cimg_library::CImg<T> x2);
+	void export2Ply(QList <QList <float>> points3D);
 
 	Ui::PhotoAnalysis *ui;
 	QList <float> descMoy;
