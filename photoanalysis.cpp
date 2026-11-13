@@ -309,46 +309,68 @@ PhotoAnalysis::PhotoAnalysis(QWidget *parent)
 			}
 			CImg<float> definitiveF;
 			float distMin = INFINITY;
+			CImg<float>X1(2, 1, 1, 1);
+			CImg<float>X2(2, 1, 1, 1);
+			CImg<float> x1, x2, X;
+			CImg<float> F;
+			CImg<float> U, S, V;
+			CImg<float> e;
+			CImg<float> ep, P1, Proj2;
+			CImg<float> skew(3,3,1,1,0);
 			for (int i = 0; i < 100000; ++i) {
 				QList<QList <float>> inliers_sample;
 				std::sample(matchs.cbegin(), matchs.cend(),
 							std::back_inserter(inliers_sample), 8,
 							*QRandomGenerator::global());
-				auto F = fondamentale(inliers_sample);
-				CImg<float> U, S, V;
+				F = fondamentale(inliers_sample);
 				F.SVD(U, S, V);
 				// e  : vecteur propre droit de F  -> dernière colonne de V
-				CImg<float> e  = V.get_column(2);
+				e  = V.get_column(2);
 				// e' : vecteur propre gauche de F -> dernière colonne de U
-				CImg<float> ep = U.get_column(2);
-				CImg<float> P1 = F;
+				ep = U.get_column(2);
+				// Normalisation (le signe est arbitraire)
+				e  /= e(2);
+				ep /= ep(2);
+				// qDebug() << "||F*e||   = " << (F * e).magnitude(); // ~1e-15
+				// qDebug() << "||F^T*e'||= " << (F.get_transpose() * ep).magnitude(); // ~1e-15
+				P1 = F;
 				P1.identity_matrix();
-				P1.append(CImg<float>::row_vector(0, 0, 0).transpose(), 'x');
-				CImg<float> skew(3,3,1,1,0);
+				P1.crop(0, 0, 3, 2);
+				// qDebug() << "P1 :";
+				// cimg_forX(P1, x) {
+				// 	qDebug() << P1(x, 0) << P1(x, 1) << P1(x, 2) << P1(x, 3);
+				// }
+
 				skew(0,1) = -ep(2); skew(0,2) =  ep(1);
 				skew(1,0) =  ep(2); skew(1,2) = -ep(0);
 				skew(2,0) = -ep(1); skew(2,1) =  ep(0);
 
-				CImg<float> P2 = skew * F;
-				P2.append(ep, 'x');
+				// P2 = F;
+				Proj2 = skew * F;
+				Proj2.append(ep, 'x');
+				Proj2(0, 3) = ep(0);
+				Proj2(1, 3) = ep(1);
+				Proj2(2, 3) = ep(2);
+				// qDebug() << "P2 :";
+				// cimg_forX(P2, x) {
+				// 	qDebug() << P2(x, 0) << P2(x, 1) << P2(x, 2) << P2(x, 3);
+				// }
 
 				QList <QList <float>> points3D;
 				float dist = 0;
 				for (const auto &p: inliers_sample) {
 					// QList<float>X1;
-					CImg<float>X1(4, 1, 1, 1);
 					X1(0) = p.at(0)*pow(2,p.at(2));
 					X1(1) = p.at(1)*pow(2,p.at(2));
-					CImg<float>X2(4, 1, 1, 1);
 					X2(0) = p.at(3)*pow(2,p.at(5));
 					X2(1) = p.at(4)*pow(2,p.at(5));
 					// X1 << p.at(0)*pow(2,p.at(2)) << p.at(1)*pow(2,p.at(2));
 					// QList<float>X2;
 					// X2 << p.at(3)*pow(2,p.at(5)) << p.at(4)*pow(2,p.at(5));
-					auto X = placePoint(P1, P2, X1, X2);
+					X = placePoint(P1, Proj2, X1, X2);
 					qDebug() << X(0) << X(1) << X(2);
-					auto x1 = P1*X;
-					auto x2 = P2*X;
+					x1 = P1*X;
+					x2 = Proj2*X;
 					dist += sqrt((X1(0)-x1(0)) * (X1(0)-x1(0)) + (X1(1)-x1(1)) * (X1(1)-x1(1)) + (X2(0)-x2(0)) * (X2(0)-x2(0)) + (X2(1)-x2(1)) * (X2(1)-x2(1)));
 					QList <float> p3D;
 					p3D << X(0) << X(1) << X(2);
@@ -459,12 +481,12 @@ cimg_library::CImg<T> PhotoAnalysis::fondamentale(QList<QList<T> > matches)
 		A(i, 8) = 1;
 	}
 	auto r = A.get_SVD();
-	qDebug() << r.at(0).width() << r.at(0).height();
-	qDebug() << r.at(1).width() << r.at(1).height();
-	qDebug() << r.at(2).width() << r.at(2).height();
+	// qDebug() << r.at(0).width() << r.at(0).height();
+	// qDebug() << r.at(1).width() << r.at(1).height();
+	// qDebug() << r.at(2).width() << r.at(2).height();
 	// La solution f est la dernière colonne de V
 	// On extrait cette colonne (qui contient n éléments)
-	CImg<T> f = r.at(2).get_row(r.at(2).height() - 1);
+	CImg<T> f = r.at(2).get_column(r.at(2).height() - 1);
 	// On ne garde que les 9 premiers coefficients (la partie utile)
 	// et on les remet en forme 3x3 pour former F
 	CImg<T> F(3, 3);
@@ -483,11 +505,14 @@ cimg_library::CImg<T> PhotoAnalysis::fondamentale(QList<QList<T> > matches)
 
 	// Reconstruction F_corrigée = U * diag(S) * V^T
 	CImg<T> F_corr = U * S * V.get_transpose();
+	cimg_forX(F_corr, x) {
+		qDebug() << F_corr(x, 0) << F_corr(x, 1) << F_corr(x, 2);
+	}
 	return F_corr;
 }
 
 template<typename T>
-CImg<T> PhotoAnalysis::placePoint(CImg<T> &P1, CImg<T> &P2, CImg<T> x1, CImg<T> x2) {
+CImg<T> PhotoAnalysis::placePoint(const CImg<T> &P1, const CImg<T> &P2, CImg<T> x1, CImg<T> x2) {
 	// P1, P2 : CImg<double> 3x4 (les matrices de projection)
 	// x1, x2 : CImg<double> 3x1 (points homogènes, ou 1x3)
 	CImg<T> A(4, 4, 1, 1, 0);
