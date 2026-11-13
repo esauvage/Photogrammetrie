@@ -309,29 +309,18 @@ PhotoAnalysis::PhotoAnalysis(QWidget *parent)
 			}
 			CImg<float> definitiveF;
 			float distMin = INFINITY;
-			for (int i = 0; i < 10; ++i) {
+			for (int i = 0; i < 100000; ++i) {
 				QList<QList <float>> inliers_sample;
 				std::sample(matchs.cbegin(), matchs.cend(),
 							std::back_inserter(inliers_sample), 8,
 							*QRandomGenerator::global());
 				auto F = fondamentale(inliers_sample);
-				cimg_forXY(F, x, y) {
-					qDebug() << F(x, y);
-				}
 				CImg<float> U, S, V;
 				F.SVD(U, S, V);
 				// e  : vecteur propre droit de F  -> dernière colonne de V
 				CImg<float> e  = V.get_column(2);
-				qDebug() << "direction de 2 vers 1";
-				cimg_forXY(e, x, y) {
-					qDebug() << e(x, y);
-				}
 				// e' : vecteur propre gauche de F -> dernière colonne de U
-				qDebug() << "direction de 1 vers 2";
 				CImg<float> ep = U.get_column(2);
-				cimg_forXY(ep, x, y) {
-					qDebug() << ep(x, y);
-				}
 				CImg<float> P1 = F;
 				P1.identity_matrix();
 				P1.append(CImg<float>::row_vector(0, 0, 0).transpose(), 'x');
@@ -345,12 +334,12 @@ PhotoAnalysis::PhotoAnalysis(QWidget *parent)
 
 				QList <QList <float>> points3D;
 				float dist = 0;
-				for (const auto &p: matchs) {
+				for (const auto &p: inliers_sample) {
 					// QList<float>X1;
-					CImg<float>X1(2, 1, 1, 1);
+					CImg<float>X1(4, 1, 1, 1);
 					X1(0) = p.at(0)*pow(2,p.at(2));
 					X1(1) = p.at(1)*pow(2,p.at(2));
-					CImg<float>X2(2, 1, 1, 1);
+					CImg<float>X2(4, 1, 1, 1);
 					X2(0) = p.at(3)*pow(2,p.at(5));
 					X2(1) = p.at(4)*pow(2,p.at(5));
 					// X1 << p.at(0)*pow(2,p.at(2)) << p.at(1)*pow(2,p.at(2));
@@ -366,6 +355,7 @@ PhotoAnalysis::PhotoAnalysis(QWidget *parent)
 					points3D << p3D;
 				}
 				if (dist < distMin) {
+					distMin = dist;
 					definitiveF = F;
 					export2Ply(points3D);
 				}
@@ -393,8 +383,6 @@ QList<QList<T>> PhotoAnalysis::testMatches(const QList<QList<T> > &a, const QLis
 {
 	auto wA = a;
 	auto wB = b;
-	cimg_library::CImg<float>fondamentalMatrix(9, 0, 1, 1);
-    fondamentalMatrix.identity_matrix();
     QList<QList<T>> matches;
 	for (int i = 0; wA.size() && wB.size() && matches.size()<100; ++i) {
 		double minDist = INFINITY;
@@ -431,7 +419,7 @@ QList<QList<T>> PhotoAnalysis::testMatches(const QList<QList<T> > &a, const QLis
 			// wB.removeAll(B2);
 			continue;
 		}
-		qDebug() << "Matching point : " << minDist << "\n" << wA.at(bestPair.first)  << "\n" << wB.at(bestPair.second);
+//		qDebug() << "Matching point : " << minDist << "\n" << wA.at(bestPair.first)  << "\n" << wB.at(bestPair.second);
 		matches << match;
 		wB.removeAll(wB.at(bestPair.second));
 	}
@@ -476,7 +464,7 @@ cimg_library::CImg<T> PhotoAnalysis::fondamentale(QList<QList<T> > matches)
 	qDebug() << r.at(2).width() << r.at(2).height();
 	// La solution f est la dernière colonne de V
 	// On extrait cette colonne (qui contient n éléments)
-	CImg<T> f = r.at(2).get_column(r.at(2).width() - 1);
+	CImg<T> f = r.at(2).get_row(r.at(2).height() - 1);
 	// On ne garde que les 9 premiers coefficients (la partie utile)
 	// et on les remet en forme 3x3 pour former F
 	CImg<T> F(3, 3);
