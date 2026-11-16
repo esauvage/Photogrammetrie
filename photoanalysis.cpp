@@ -254,37 +254,6 @@ PhotoAnalysis::PhotoAnalysis(QWidget *parent)
 			pointsInteret << POIs;
 			image = image.resize_halfXY();
 		}
-		// for (int i = 0; i < descMoy.size(); ++i) {
-		// 	descMoy[i] /= pointsInteret.size();
-		// }
-		// double stdDev = 0;
-		// for (const auto &p: pointsInteret) {
-		// 	auto poi = p.last(descMoy.size());
-		// 	for (int i = 0; i < descMoy.size(); ++i) {
-		// 		stdDev += (poi[i] - descMoy[i])*(poi[i] - descMoy[i]);
-		// 	}
-		// 	stdDev = sqrt(stdDev);
-		// }
-		// QList <QList <float>> toDel;
-		// for (const auto &p1: pointsInteret) {
-		// 	auto poi1 = p1.last(descMoy.size());
-		// 	auto dev = 0.;
-		// 	for (const auto &p2: pointsInteret) {
-		// 		if (p1 == p2) continue;
-		// 		auto poi2 = p2.last(descMoy.size());
-		// 		for (int i = 0; i < descMoy.size(); ++i) {
-		// 			dev += (poi1[i] - poi2[i])*(poi1[i] - poi2[i]);
-		// 		}
-		// 		dev = sqrt(dev);
-		// 		if (dev < stdDev*0.1) {
-		// 			toDel << p2 << p1;
-		// 		}
-		// 	}
-		// }
-		// qDebug() << "Descripteur moyen: " << descMoy;
-		// for (auto& p : toDel) {
-		// 	pointsInteret.removeAll(p);
-		// }
 		image = cimg_library::CImg<float>(f.toLocal8Bit());
 		image.append(prevImage);
 		for (const auto &p: pointsInteret){
@@ -303,62 +272,26 @@ PhotoAnalysis::PhotoAnalysis(QWidget *parent)
 		ui->lblNbPoints->setText(ui->lblNbPoints->text() + QString("%1\n").arg(pointsInteret.length()));
 		if (!prevPOIs.empty()) {
 			auto matchs = testMatches(pointsInteret, prevPOIs);
-			for (const auto &p: matchs) {
-				image.draw_line(p.at(0)*pow(2,p.at(2)), p.at(1)*pow(2,p.at(2)),
-								p.at(3)*pow(2,p.at(5))+ prevImage.width(), p.at(4)*pow(2,p.at(5)), cyan);
-			}
 			CImg<float> definitiveF;
 			float distMin = INFINITY;
-			CImg<float>X1(2, 1, 1, 1);
-			CImg<float>X2(2, 1, 1, 1);
-			CImg<float> x1, x2, X;
-			CImg<float> F;
-			CImg<float> U, S, V;
-			CImg<float> e;
-			CImg<float> ep, P1, Proj2;
-			CImg<float> skew(3,3,1,1,0);
-			for (int i = 0; i < 100000; ++i) {
-				QList<QList <float>> inliers_sample;
+			QList<QList <float>> inliers_sample;
+			for (int i = 0; i < 1000000; ++i) {
+				inliers_sample.clear();
 				std::sample(matchs.cbegin(), matchs.cend(),
 							std::back_inserter(inliers_sample), 8,
 							*QRandomGenerator::global());
+				CImg<float> F;
 				F = fondamentale(inliers_sample);
-				F.SVD(U, S, V);
-				// e  : vecteur propre droit de F  -> dernière colonne de V
-				e  = V.get_column(2);
-				// e' : vecteur propre gauche de F -> dernière colonne de U
-				ep = U.get_column(2);
-				// Normalisation (le signe est arbitraire)
-				e  /= e(2);
-				ep /= ep(2);
-				// qDebug() << "||F*e||   = " << (F * e).magnitude(); // ~1e-15
-				// qDebug() << "||F^T*e'||= " << (F.get_transpose() * ep).magnitude(); // ~1e-15
-				P1 = F;
-				P1.identity_matrix();
-				P1.crop(0, 0, 3, 2);
-				// qDebug() << "P1 :";
-				// cimg_forX(P1, x) {
-				// 	qDebug() << P1(x, 0) << P1(x, 1) << P1(x, 2) << P1(x, 3);
-				// }
-
-				skew(0,1) = -ep(2); skew(0,2) =  ep(1);
-				skew(1,0) =  ep(2); skew(1,2) = -ep(0);
-				skew(2,0) = -ep(1); skew(2,1) =  ep(0);
-
-				// P2 = F;
-				Proj2 = skew * F;
-				Proj2.append(ep, 'x');
-				Proj2(0, 3) = ep(0);
-				Proj2(1, 3) = ep(1);
-				Proj2(2, 3) = ep(2);
-				// qDebug() << "P2 :";
-				// cimg_forX(P2, x) {
-				// 	qDebug() << P2(x, 0) << P2(x, 1) << P2(x, 2) << P2(x, 3);
-				// }
+				CImg<float> P1;
+				CImg<float> P2;
+				constructProjMatrices(F, P1, P2);
 
 				QList <QList <float>> points3D;
 				float dist = 0;
 				for (const auto &p: inliers_sample) {
+					CImg<float>X1(2, 1, 1, 1);
+					CImg<float>X2(2, 1, 1, 1);
+					CImg<float> x1, x2, X;
 					// QList<float>X1;
 					X1(0) = p.at(0)*pow(2,p.at(2));
 					X1(1) = p.at(1)*pow(2,p.at(2));
@@ -367,10 +300,9 @@ PhotoAnalysis::PhotoAnalysis(QWidget *parent)
 					// X1 << p.at(0)*pow(2,p.at(2)) << p.at(1)*pow(2,p.at(2));
 					// QList<float>X2;
 					// X2 << p.at(3)*pow(2,p.at(5)) << p.at(4)*pow(2,p.at(5));
-					X = placePoint(P1, Proj2, X1, X2);
-					qDebug() << X(0) << X(1) << X(2);
+					X = placePoint(P1, P2, X1, X2);
 					x1 = P1*X;
-					x2 = Proj2*X;
+					x2 = P2*X;
 					dist += sqrt((X1(0)-x1(0)) * (X1(0)-x1(0)) + (X1(1)-x1(1)) * (X1(1)-x1(1)) + (X2(0)-x2(0)) * (X2(0)-x2(0)) + (X2(1)-x2(1)) * (X2(1)-x2(1)));
 					QList <float> p3D;
 					p3D << X(0) << X(1) << X(2);
@@ -378,9 +310,14 @@ PhotoAnalysis::PhotoAnalysis(QWidget *parent)
 				}
 				if (dist < distMin) {
 					distMin = dist;
+					qDebug() << "Minimal distance found : " << distMin;
 					definitiveF = F;
 					export2Ply(points3D);
 				}
+			}
+			for (const auto &p: inliers_sample) {
+				image.draw_line(p.at(0)*pow(2,p.at(2)), p.at(1)*pow(2,p.at(2)),
+								p.at(3)*pow(2,p.at(5))+ prevImage.width(), p.at(4)*pow(2,p.at(5)), cyan);
 			}
 		}
 		image.save(QString("poi%1.bmp").arg(name).toLocal8Bit());
@@ -406,7 +343,7 @@ QList<QList<T>> PhotoAnalysis::testMatches(const QList<QList<T> > &a, const QLis
 	auto wA = a;
 	auto wB = b;
     QList<QList<T>> matches;
-	for (int i = 0; wA.size() && wB.size() && matches.size()<100; ++i) {
+	for (int i = 0; wA.size() && wB.size() && matches.size()<30; ++i) {
 		double minDist = INFINITY;
 		double minDist2 = INFINITY;
 		QPair<int, int> bestPair;
@@ -505,9 +442,9 @@ cimg_library::CImg<T> PhotoAnalysis::fondamentale(QList<QList<T> > matches)
 
 	// Reconstruction F_corrigée = U * diag(S) * V^T
 	CImg<T> F_corr = U * S * V.get_transpose();
-	cimg_forX(F_corr, x) {
-		qDebug() << F_corr(x, 0) << F_corr(x, 1) << F_corr(x, 2);
-	}
+	// cimg_forX(F_corr, x) {
+	// 	qDebug() << F_corr(x, 0) << F_corr(x, 1) << F_corr(x, 2);
+	// }
 	return F_corr;
 }
 
@@ -548,5 +485,45 @@ void PhotoAnalysis::export2Ply(QList <QList <float>> points3D) {
 	out << "property float x" << Qt::endl << "property float y" << Qt::endl << "property float z" << Qt::endl << "end_header" << Qt::endl;
 	for (const auto &p : points3D) {
 		out << p.at(0) << "\t" << p.at(1) << "\t" << p.at(2) << Qt::endl;
+		qDebug() << p.at(0) << p.at(1) << p.at(2);
 	}
+}
+template<typename T>
+void PhotoAnalysis::constructProjMatrices(const cimg_library::CImg<T> &F, CImg<T> &P1, CImg<T> &P2)
+{
+	CImg<T>skew(3, 3, 1, 1);
+	CImg<T>e, ep;
+	CImg<T> U, S, V;
+	F.SVD(U, S, V);
+	// e  : vecteur propre droit de F  -> dernière colonne de V
+	e  = V.get_column(2);
+	// e' : vecteur propre gauche de F -> dernière colonne de U
+	ep = U.get_column(2);
+	// Normalisation (le signe est arbitraire)
+	e  /= e(2);
+	ep /= ep(2);
+	// qDebug() << "||F*e||   = " << (F * e).magnitude(); // ~1e-15
+	// qDebug() << "||F^T*e'||= " << (F.get_transpose() * ep).magnitude(); // ~1e-15
+	P1 = F;
+	P1.identity_matrix();
+	P1.crop(0, 0, 3, 2);
+	// qDebug() << "P1 :";
+	// cimg_forX(P1, x) {
+	// 	qDebug() << P1(x, 0) << P1(x, 1) << P1(x, 2) << P1(x, 3);
+	// }
+
+	skew(0,1) = -ep(2); skew(0,2) =  ep(1);
+	skew(1,0) =  ep(2); skew(1,2) = -ep(0);
+	skew(2,0) = -ep(1); skew(2,1) =  ep(0);
+
+	P2 = skew * F;
+	P2.append(ep, 'x');
+	// test(0, 3) = ep(0);
+	// test(1, 3) = ep(1);
+	// test(2, 3) = ep(2);
+	// // qDebug() << "P2 :";
+	// // cimg_forX(P2, x) {
+	// // 	qDebug() << P2(x, 0) << P2(x, 1) << P2(x, 2) << P2(x, 3);
+	// // }
+//	P2 = test;
 }

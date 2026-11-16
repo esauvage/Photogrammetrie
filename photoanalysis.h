@@ -36,7 +36,8 @@ private:
 	template<typename T>
 	cimg_library::CImg<T> placePoint(const cimg_library::CImg<T> &P1, const cimg_library::CImg<T> &P2, cimg_library::CImg<T> x1, cimg_library::CImg<T> x2);
 	void export2Ply(QList <QList <float>> points3D);
-
+	template<typename T>
+	void constructProjMatrices(const cimg_library::CImg<T> &F, cimg_library::CImg<T> &P1, cimg_library::CImg<T> &P2);
 	Ui::PhotoAnalysis *ui;
 	QList <float> descMoy;
 };
