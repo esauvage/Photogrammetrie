@@ -38,6 +38,8 @@ private:
 	void export2Ply(QList <QList <float>> points3D);
 	template<typename T>
 	void constructProjMatrices(const cimg_library::CImg<T> &F, cimg_library::CImg<T> &P1, cimg_library::CImg<T> &P2);
+	template<typename T>
+	void draw_line_abc(cimg_library::CImg<T> &img, double a, double b, double c, const unsigned char *color, int width);
 	Ui::PhotoAnalysis *ui;
 	QList <float> descMoy;
 };

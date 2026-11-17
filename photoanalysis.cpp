@@ -12,9 +12,10 @@
 using namespace cimg_library;
 //using namespace std;
 
-float magenta[3] = {255, 0, 255};
-float cyan[3] = {0, 255, 255};
-float green[3] = {0, 255, 0};
+const unsigned char magenta[] = {255, 0, 255};
+const unsigned char cyan[] = {0, 255, 255};
+const unsigned char green[] = {0, 255, 0};
+const unsigned char red[] = {255, 0, 0};
 
 template<typename T>
 QList<float> PhotoAnalysis::descripteur(int x, int y, int z, int c, float angle, const CImg<T> &t) {
@@ -275,11 +276,12 @@ PhotoAnalysis::PhotoAnalysis(QWidget *parent)
 			CImg<float> definitiveF;
 			float distMin = INFINITY;
 			QList<QList <float>> inliers_sample;
-			for (int i = 0; i < 1000000; ++i) {
+			// for (int i = 0; i < 1000000; ++i) {
 				inliers_sample.clear();
-				std::sample(matchs.cbegin(), matchs.cend(),
-							std::back_inserter(inliers_sample), 8,
-							*QRandomGenerator::global());
+				inliers_sample << matchs.at(5) << matchs.at(7) << matchs.at(8) << matchs.at(9) << matchs.at(12) << matchs.at(14) << matchs.at(17) << matchs.at(19);
+				// std::sample(matchs.cbegin(), matchs.cend(),
+				// 			std::back_inserter(inliers_sample), 8,
+				// 			*QRandomGenerator::global());
 				CImg<float> F;
 				F = fondamentale(inliers_sample);
 				CImg<float> P1;
@@ -289,14 +291,16 @@ PhotoAnalysis::PhotoAnalysis(QWidget *parent)
 				QList <QList <float>> points3D;
 				float dist = 0;
 				for (const auto &p: inliers_sample) {
-					CImg<float>X1(2, 1, 1, 1);
-					CImg<float>X2(2, 1, 1, 1);
+					CImg<float>X1(3, 1, 1, 1);
+					CImg<float>X2(3, 1, 1, 1);
 					CImg<float> x1, x2, X;
 					// QList<float>X1;
-					X1(0) = p.at(0)*pow(2,p.at(2));
-					X1(1) = p.at(1)*pow(2,p.at(2));
-					X2(0) = p.at(3)*pow(2,p.at(5));
-					X2(1) = p.at(4)*pow(2,p.at(5));
+					X1(0) = p.at(0);
+					X1(1) = p.at(1);
+					X1(2) = 1;
+					X2(0) = p.at(2);
+					X2(1) = p.at(3);
+					X2(2) = 1;
 					// X1 << p.at(0)*pow(2,p.at(2)) << p.at(1)*pow(2,p.at(2));
 					// QList<float>X2;
 					// X2 << p.at(3)*pow(2,p.at(5)) << p.at(4)*pow(2,p.at(5));
@@ -307,6 +311,12 @@ PhotoAnalysis::PhotoAnalysis(QWidget *parent)
 					QList <float> p3D;
 					p3D << X(0) << X(1) << X(2);
 					points3D << p3D;
+
+					// Usage : lignes épipolaires dans l'image 2, à partir des points de l'image 1
+					CImg<double> l = F.get_transpose() * X1.get_transpose();   // m.x1 : point homogène 3x1 dans l'image 1
+					draw_line_abc(image, l(0), l(1), l(2), red, 0);
+					CImg<double> lp = F * X2.get_transpose();   // m.x1 : point homogène 3x1 dans l'image 1
+					draw_line_abc(image, lp(0), lp(1), lp(2), green, prevImage.width());
 				}
 				if (dist < distMin) {
 					distMin = dist;
@@ -314,12 +324,12 @@ PhotoAnalysis::PhotoAnalysis(QWidget *parent)
 					definitiveF = F;
 					export2Ply(points3D);
 				}
-			}
+			// }
 			int counter = 0;
 			for (const auto &p: matchs) {
-				image.draw_line(p.at(0)*pow(2,p.at(2)), p.at(1)*pow(2,p.at(2)),
-								p.at(3)*pow(2,p.at(5))+ prevImage.width(), p.at(4)*pow(2,p.at(5)), cyan);
-				image.draw_text(p.at(0)*pow(2,p.at(2)), p.at(1)*pow(2,p.at(2)), QString("%1").arg(counter).toStdString().c_str(), cyan, 0, 1, 24);
+				image.draw_line(p.at(0), p.at(1),
+								p.at(2)+ prevImage.width(), p.at(3), cyan);
+				image.draw_text(p.at(0), p.at(1), QString("%1").arg(counter).toStdString().c_str(), cyan, 0, 1, 24);
 				counter++;
 			}
 		}
@@ -371,8 +381,8 @@ QList<QList<T>> PhotoAnalysis::testMatches(const QList<QList<T> > &a, const QLis
 			}
 		}
 		QList<T> match;
-		match << wA.at(bestPair.first)[0] << wA.at(bestPair.first)[1] << wA.at(bestPair.first)[5]
-			  << wB.at(bestPair.second)[0] << wB.at(bestPair.second)[1] << wB.at(bestPair.second)[5];
+		match << wA.at(bestPair.first)[0]*pow(2, wA.at(bestPair.first)[5]) << wA.at(bestPair.first)[1]*pow(2, wA.at(bestPair.first)[5])
+			  << wB.at(bestPair.second)[0]*pow(2, wA.at(bestPair.second)[5]) << wB.at(bestPair.second)[1]*pow(2, wA.at(bestPair.second)[5]);
 		wA.removeAll(wA.at(bestPair.first));
 		if (minDist/minDist2 > 0.99) {
 			// auto B1 = wB.at(bestPair.second);
@@ -396,17 +406,17 @@ cimg_library::CImg<T> PhotoAnalysis::fondamentale(QList<QList<T> > matches)
 	CImg<T> A(matches.size(), 9);
 	for (int i = 0; i < matches.size();++i) {
 		const auto & m=matches.at(i);
-		A(i, 0) = m.at(0)*pow(2, m.at(2))*m.at(3)*pow(2, m.at(5));
-		A(i, 1) = m.at(0)*pow(2, m.at(2))*m.at(4)*pow(2, m.at(5));
-		A(i, 2) = m.at(0)*pow(2, m.at(2));
-		A(i, 3) = m.at(1)*pow(2, m.at(2))*m.at(3)*pow(2, m.at(5));
-		A(i, 4) = m.at(1)*pow(2, m.at(2))*m.at(4)*pow(2, m.at(5));
-		A(i, 5) = m.at(1)*pow(2, m.at(2));
-		A(i, 6) = m.at(3)*pow(2, m.at(5));
-		A(i, 7) = m.at(4)*pow(2, m.at(5));
+		A(i, 0) = m.at(0)*m.at(2);
+		A(i, 1) = m.at(0)*m.at(3);
+		A(i, 2) = m.at(0);
+		A(i, 3) = m.at(1)*m.at(2);
+		A(i, 4) = m.at(1)*m.at(3);
+		A(i, 5) = m.at(1);
+		A(i, 6) = m.at(2);
+		A(i, 7) = m.at(3);
 		A(i, 8) = 1;
 	}
-	auto r = A.get_SVD();
+	auto r = A.get_transpose().get_SVD();
 	// qDebug() << r.at(0).width() << r.at(0).height();
 	// qDebug() << r.at(1).width() << r.at(1).height();
 	// qDebug() << r.at(2).width() << r.at(2).height();
@@ -419,6 +429,7 @@ cimg_library::CImg<T> PhotoAnalysis::fondamentale(QList<QList<T> > matches)
 	for (int i = 0; i < 9; ++i) {
 		F(i % 3, i / 3) = f(i); // Attention à l'ordre de remplissage
 	}
+	F.transpose();
 	CImg<T> U, S, V;
 	F.SVD(U, S, V);
 
@@ -515,4 +526,29 @@ void PhotoAnalysis::constructProjMatrices(const cimg_library::CImg<T> &F, CImg<T
 	// // 	qDebug() << P2(x, 0) << P2(x, 1) << P2(x, 2) << P2(x, 3);
 	// // }
 //	P2 = test;
+}
+
+template<typename T>
+void PhotoAnalysis::draw_line_abc(CImg<T>& img, double a, double b, double c,
+				   const unsigned char* color, int width) {
+	const int W = img.width()/2, H = img.height();
+	std::vector<std::pair<double,double>> pts;
+
+	if (std::abs(b) > 1e-12) {
+		double y0 = -c / b;                 // x = 0
+		double y1 = -(a*(W-1) + c) / b;     // x = W-1
+		if (y0 >= 0 && y0 <= H-1) pts.push_back({0.0, y0});
+		if (y1 >= 0 && y1 <= H-1) pts.push_back({W-1.0, y1});
+	}
+	if (std::abs(a) > 1e-12) {
+		double x0 = -c / a;                 // y = 0
+		double x1 = -(b*(H-1) + c) / a;     // y = H-1
+		if (x0 >= 0 && x0 <= W-1) pts.push_back({x0, 0.0});
+		if (x1 >= 0 && x1 <= W-1) pts.push_back({x1, H-1.0});
+	}
+	if (pts.size() >= 2) {
+		img.draw_line((int)std::lround(pts[0].first) + width, (int)std::lround(pts[0].second),
+					  (int)std::lround(pts[1].first) + width, (int)std::lround(pts[1].second),
+					  color);
+	}
 }
