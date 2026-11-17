@@ -315,9 +315,12 @@ PhotoAnalysis::PhotoAnalysis(QWidget *parent)
 					export2Ply(points3D);
 				}
 			}
-			for (const auto &p: inliers_sample) {
+			int counter = 0;
+			for (const auto &p: matchs) {
 				image.draw_line(p.at(0)*pow(2,p.at(2)), p.at(1)*pow(2,p.at(2)),
 								p.at(3)*pow(2,p.at(5))+ prevImage.width(), p.at(4)*pow(2,p.at(5)), cyan);
+				image.draw_text(p.at(0)*pow(2,p.at(2)), p.at(1)*pow(2,p.at(2)), QString("%1").arg(counter).toStdString().c_str(), cyan, 0, 1, 24);
+				counter++;
 			}
 		}
 		image.save(QString("poi%1.bmp").arg(name).toLocal8Bit());
@@ -343,7 +346,7 @@ QList<QList<T>> PhotoAnalysis::testMatches(const QList<QList<T> > &a, const QLis
 	auto wA = a;
 	auto wB = b;
     QList<QList<T>> matches;
-	for (int i = 0; wA.size() && wB.size() && matches.size()<30; ++i) {
+	for (int i = 0; wA.size() && wB.size() && matches.size()<20; ++i) {
 		double minDist = INFINITY;
 		double minDist2 = INFINITY;
 		QPair<int, int> bestPair;
@@ -382,20 +385,6 @@ QList<QList<T>> PhotoAnalysis::testMatches(const QList<QList<T> > &a, const QLis
 		matches << match;
 		wB.removeAll(wB.at(bestPair.second));
 	}
-	// cimg_library::CImg<float>row(9,1, 1, 1);
-	// row(0,0) = match[2] * match[0];
-	// row(1,0) = match[2] * match[1];
-	// row(2,0) = match[2];
-	// row(3,0) = match[3] * match[0];
-	// row(4,0) = match[3] * match[1];
-	// row(5,0) = match[3];
-	// row(6,0) = match[0];
-	// row(7,0) = match[1];
-	// row(8,0) = 1;
-	// fondamentalMatrix.append(row, 'y');
-	// if (fondamentalMatrix.height() >= fondamentalMatrix.width()) {
-	// 	auto solution = estimateF(fondamentalMatrix);
-	// }
 	return matches;
 }
 
